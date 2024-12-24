@@ -226,16 +226,16 @@ def get_session_dishes_data_query(check):
     return f"""
         WITH NumberedDishes AS (
             SELECT 
-                MENUITEMS.NAME AS MenuItemName, 
+                REPLACE(MENUITEMS.NAME, '<', '&lt;') AS MenuItemName, 
                 SESSIONDISHES.QUANTITY AS Quantity, 
                 SESSIONDISHES.PRLISTSUM AS PRListSum,
                 SESSIONDISHES.ISCOMBOCOMP,
-                DISHMODIFIERS.OPENNAME AS ModifierOpenName,
+                REPLACE(DISHMODIFIERS.OPENNAME, '<', '&lt;') AS ModifierOpenName,
                 DISHMODIFIERS.PIECES AS ModifierPieces,
                 ORDERVOIDS.NAME AS VoidName,
-                LAG(MENUITEMS.NAME) OVER (ORDER BY SESSIONDISHES.UNI) AS PrevMenuItemName,
+                LAG(REPLACE(MENUITEMS.NAME, '<', '&lt;')) OVER (ORDER BY SESSIONDISHES.UNI) AS PrevMenuItemName,
                 LAG(SESSIONDISHES.QUANTITY) OVER (ORDER BY SESSIONDISHES.UNI) AS PrevMenuItemQuantity,
-                LAG(DISHMODIFIERS.OPENNAME) OVER (ORDER BY SESSIONDISHES.UNI) AS PrevModifierOpenName
+                LAG(REPLACE(DISHMODIFIERS.OPENNAME, '<', '&lt;')) OVER (ORDER BY SESSIONDISHES.UNI) AS PrevModifierOpenName
             FROM SESSIONDISHES
             LEFT JOIN MENUITEMS ON SESSIONDISHES.SIFR = MENUITEMS.SIFR
             LEFT JOIN DISHMODIFIERS ON SESSIONDISHES.UNI = DISHMODIFIERS.DISHUNI AND SESSIONDISHES.VISIT = DISHMODIFIERS.VISIT AND DISHMODIFIERS.COMBODISHUNI = 0
@@ -277,13 +277,9 @@ def get_discount_data_query(check):
         WHERE DISHDISCOUNTS.VISIT = (SELECT MAX(VISIT) FROM PRINTCHECKS WHERE CHECKNUM = {check})
     """
 
+
 def connectbd(database_id, ip_address, username, password, query_type, date=None, end=None, check=None, classic=None):
     """Подключается к базе данных и возвращает данные в виде DataFrame."""
-    # Получаем текущую дату
-    current_date = datetime.today()
-    # Вычитаем 7 дней из текущей даты
-    previous_date = current_date - timedelta(days=7)
-
     # Формируем строку подключения с использованием SQLAlchemy и указанной базы данных
     connection_string = (f"mssql+pyodbc://"
                          f"{username}:{password}@{ip_address}/{database_id}?"

@@ -25,3 +25,6 @@ LOCATION_CONFIG = {
         'classific': 2560
     }
 }
+
+
+#LOCATIONS_NAMES = [loc_name for loc in LOCATIONS for loc_name in loc.values()]
