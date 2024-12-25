@@ -9,6 +9,7 @@ import send_reports
 
 router = Router()
 
+
 @router.message(Command(commands=["start"]))
 async def start(message: types.Message, state: FSMContext):
     await message.answer("Добро пожаловать! Выберите действие:", reply_markup=main_menu_keyboard())
@@ -62,12 +63,12 @@ async def process_calendar(callback_query: types.CallbackQuery, callback_data: d
         if user_data.get('action') == 'Отмена пречеков':
             if user_data.get('flag') == True:
                 await state.update_data(next_date=date)
-                await send_reports.show_cansel_prechek(callback_query.message, state)
+                await send_reports.show_cancel_precheck(callback_query.message, state)
             else:
                 await state.update_data(prev_date=date)
                 await state.update_data(flag=True)
                 await callback_query.message.answer("Выберите дату конца отчёта:",
-                                     reply_markup=await SimpleCalendar().start_calendar())
+                                                    reply_markup=await SimpleCalendar().start_calendar())
                 await state.set_state(Form.choosing_date)
         if user_data.get('action') == 'Скидки':
             await send_reports.show_discounts(callback_query.message, state)
@@ -81,7 +82,7 @@ async def process_calendar(callback_query: types.CallbackQuery, callback_data: d
                 await state.update_data(prev_date=date)
                 await state.update_data(flag=True)
                 await callback_query.message.answer("Выберите дату конца отчёта:",
-                                     reply_markup=await SimpleCalendar().start_calendar())
+                                                    reply_markup=await SimpleCalendar().start_calendar())
                 await state.set_state(Form.choosing_date)
 
 

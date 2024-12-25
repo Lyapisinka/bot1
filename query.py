@@ -1,13 +1,9 @@
 from sqlalchemy import create_engine, text
 import pandas as pd
-from datetime import datetime, timedelta
 
 
-def get_sales_dish(previous_date, current_date, classic):
-    """Возвращает SQL-запрос для 'OperationLog'."""
-    previous_date_str = datetime.strptime(previous_date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    current_date_str = datetime.strptime(current_date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    query = f"""
+def get_sales_dish(prev_date, date, classic):
+    query = text(f"""
         SELECT
           CLASSIFICATORGROUPS0000.NAME AS "CATEGORY",
           MENUITEMS00."NAME" AS "DISH",
@@ -61,14 +57,15 @@ def get_sales_dish(previous_date, current_date, classic):
           (PrintChecks00."STATE" = 6)
           AND (PrintChecks00."IGNOREINREP" = 0)
           AND (GLOBALSHIFTS00."STATUS" = 3)
-          AND GLOBALSHIFTS00.SHIFTDATE BETWEEN CONVERT(datetime, '{previous_date_str}', 102) AND CONVERT(datetime, '{current_date_str}')
+          AND GLOBALSHIFTS00.SHIFTDATE BETWEEN CONVERT(datetime, '{prev_date}', 102) AND CONVERT(datetime, '{date}', 102)
         GROUP BY CLASSIFICATORGROUPS0000.NAME, MENUITEMS00."NAME"
         ORDER BY "CATEGORY", DISH
-    """
+    """)
+
     return query
 
+
 def get_check(date):
-    date_converted = datetime.strptime(date, '%d.%m.%Y').strftime('%Y.%m.%d')
     query = text(f"""
                 SELECT
                   CURRENCIES.NAME AS "CURRENCY",
@@ -85,18 +82,15 @@ def get_check(date):
                 WHERE
                   PrintChecks."STATE" = 6
                   AND PrintChecks."IGNOREINREP" = 0
-                  AND GLOBALSHIFTS."SHIFTDATE" = CONVERT(DATETIME, '{date_converted}', 102)
+                  AND GLOBALSHIFTS."SHIFTDATE" = CONVERT(DATETIME, '{date}', 102)
                   AND GLOBALSHIFTS."STATUS" = 3
                 ORDER BY "CURRENCY", CLOSEDATETIME
     """)
     return query
 
-def get_discounted_check_details(date):
-    # Устанавливаем подключение к базе данных
 
-    date_converted = datetime.strptime(date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    # SQL-запрос с параметризованной датой
-    query = f"""
+def get_discounted_check_details(date):
+    query = text(f"""
         WITH RankedDiscounts AS (
             SELECT
                 DISCOUNTS00.NAME,
@@ -123,7 +117,7 @@ def get_discounted_check_details(date):
 			LEFT JOIN GLOBALSHIFTS
 			  ON (GLOBALSHIFTS.SHIFTNUM = SHIFTS00.ICOMMONSHIFT)
             WHERE
-              PrintChecks00."STATE" = 6 AND GLOBALSHIFTS.SHIFTDATE = CONVERT(datetime, '{date_converted}', 102)
+              PrintChecks00."STATE" = 6 AND GLOBALSHIFTS.SHIFTDATE = CONVERT(datetime, '{date}', 102)
         )
         SELECT
             CASE WHEN RowNum = 1 THEN NAME ELSE NULL END AS NAME,
@@ -135,78 +129,84 @@ def get_discounted_check_details(date):
             DI,
             NI,
             ShiftDate
-        FROM RankedDiscounts    """
+        FROM RankedDiscounts
+    """)
     return query
 
-def get_query_for_operations(previous_date, current_date):
-    """Возвращает SQL-запрос для 'OperationLog'."""
-    previous_date_str = datetime.strptime(previous_date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    current_date_str = datetime.strptime(current_date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    query = ("SELECT OP.[DATETIME] AS 'Дата', PRI.CHECKNUM AS 'Номер чека', "
-             "EM.NAME AS 'Менеджер', EMP.NAME AS 'Официант', "
-             "OP.ORDERSUMBEFORE AS 'Сумма до', ORD.PAIDSUM AS 'Сумма после', "
-             "(ORD.PAIDSUM - OP.ORDERSUMBEFORE) AS 'Разница', 1 AS 'Кол-во' "
-             "FROM OPERATIONLOG OP "
-             "JOIN EMPLOYEES EM ON OP.OPERATOR = EM.SIFR "
-             "JOIN ORDERS ORD ON OP.VISIT = ORD.VISIT "
-             "JOIN EMPLOYEES EMP ON ORD.ICREATOR = EMP.SIFR "
-             "JOIN CASHGROUPS CASH ON OP.MIDSERVER = CASH.SIFR "
-             "JOIN RESTAURANTS REST ON CASH.RESTAURANT = REST.SIFR "
-             "JOIN PRINTCHECKS PRI ON ORD.VISIT = PRI.VISIT "
-             f"WHERE [DATETIME] BETWEEN CONVERT(datetime, '{previous_date_str}', 102) AND CONVERT(datetime, '{current_date_str}', 102) AND "
-             "OPERATION = '463' AND PRI.[STATE] = 7 AND OP.PARAMETER = PRI.CHECKNUM "
-             "ORDER BY REST.NAME, OP.[DATETIME]")
+
+def get_query_for_operations(prev_date, date):
+    query = text(f"""
+        SELECT
+            OP.[DATETIME] AS "Дата",
+            PRI.CHECKNUM AS "Номер чека",
+            EM.NAME AS "Менеджер",
+            EMP.NAME AS "Официант",
+            OP.ORDERSUMBEFORE AS "Сумма до",
+            ORD.PAIDSUM AS "Сумма после",
+            (ORD.PAIDSUM - OP.ORDERSUMBEFORE) AS "Разница",
+            1 AS "Кол-во"
+        FROM OPERATIONLOG OP
+        JOIN EMPLOYEES EM ON OP.OPERATOR = EM.SIFR
+        JOIN ORDERS ORD ON OP.VISIT = ORD.VISIT
+        JOIN EMPLOYEES EMP ON ORD.ICREATOR = EMP.SIFR
+        JOIN CASHGROUPS CASH ON OP.MIDSERVER = CASH.SIFR
+        JOIN RESTAURANTS REST ON CASH.RESTAURANT = REST.SIFR
+        JOIN PRINTCHECKS PRI ON ORD.VISIT = PRI.VISIT
+        WHERE
+            OP.[DATETIME] BETWEEN CONVERT(datetime, '{prev_date}', 102) AND CONVERT(datetime, '{date}', 102)
+            AND OP.OPERATION = '463'
+            AND PRI.[STATE] = 7
+            AND OP.PARAMETER = PRI.CHECKNUM
+        ORDER BY REST.NAME, OP.[DATETIME]
+    """)
     return query
 
 
 def get_query_for_payments(date):
-    """Возвращает SQL-запрос для агрегации 'Payments' с использованием CTE."""
-    # Преобразуем дату из формата 'дд.мм.гггг' в 'гггг.мм.дд'
-    date_converted = datetime.strptime(date, '%d.%m.%Y').strftime('%Y.%m.%d')
-    query = (
-        "WITH CurrencyData AS ("
-        "    SELECT "
-        "        CURRENCYTYPES00.\"NAME\" AS \"Тип валюты\", "
-        "        CURRENCIES00.\"NAME\" AS \"Валюта\", "
-        "        SUM(Payments.\"BASICSUM\") AS \"Сумма\", "
-        "        ROW_NUMBER() OVER(PARTITION BY CURRENCYTYPES00.\"NAME\" ORDER BY CURRENCIES00.\"NAME\") AS rn "
-        "    FROM Payments "
-        "    JOIN ORDERSESSIONS OrderSessions00 "
-        "      ON (OrderSessions00.\"VISIT\" = Payments.\"VISIT\") "
-        "      AND (OrderSessions00.\"MIDSERVER\" = Payments.\"MIDSERVER\") "
-        "      AND (OrderSessions00.\"UNI\" = Payments.\"SESSIONUNI\") "
-        "    JOIN ORDERS Orders00 "
-        "      ON (Orders00.\"VISIT\" = OrderSessions00.\"VISIT\") "
-        "      AND (Orders00.\"MIDSERVER\" = OrderSessions00.\"MIDSERVER\") "
-        "      AND (Orders00.\"IDENTINVISIT\" = OrderSessions00.\"ORDERIDENT\") "
-        "    LEFT JOIN CURRENCIES CURRENCIES00 "
-        "      ON (CURRENCIES00.\"SIFR\" = Payments.\"SIFR\") "
-        "    LEFT JOIN CURRENCYTYPES CURRENCYTYPES00 "
-        "      ON (CURRENCYTYPES00.\"SIFR\" = CURRENCIES00.\"PARENT\") "
-        "    JOIN GLOBALSHIFTS GLOBALSHIFTS00 "
-        "      ON (GLOBALSHIFTS00.\"MIDSERVER\" = Orders00.\"MIDSERVER\") "
-        "      AND (GLOBALSHIFTS00.\"SHIFTNUM\" = Orders00.\"ICOMMONSHIFT\") "
-        "    WHERE "
-        "      Payments.\"IGNOREINREP\" = 0 "
-        "      AND Payments.\"STATE\" = 6 "
-        f"      AND GLOBALSHIFTS00.\"SHIFTDATE\" = CONVERT(DATETIME, '{date_converted}', 102) "
-        "      AND GLOBALSHIFTS00.\"STATUS\" = 3 "
-        "      AND Payments.\"SHOWINREP\" BETWEEN 0 AND 2 "
-        "    GROUP BY "
-        "      CURRENCYTYPES00.\"NAME\", "
-        "      CURRENCIES00.\"NAME\" "
-        ") "
-        "SELECT "
-        "    CASE WHEN rn = 1 THEN \"Тип валюты\" END AS \"Тип валюты\", "
-        "    \"Валюта\", "
-        "    \"Сумма\" "
-        "FROM CurrencyData "
-    )
+    query = text(f"""
+        WITH CurrencyData AS (
+            SELECT 
+                CURRENCYTYPES00."NAME" AS "Тип валюты", 
+                CURRENCIES00."NAME" AS "Валюта", 
+                SUM(Payments."BASICSUM") AS "Сумма", 
+                ROW_NUMBER() OVER(PARTITION BY CURRENCYTYPES00."NAME" ORDER BY CURRENCIES00."NAME") AS rn
+            FROM Payments
+            JOIN ORDERSESSIONS OrderSessions00
+              ON (OrderSessions00."VISIT" = Payments."VISIT")
+              AND (OrderSessions00."MIDSERVER" = Payments."MIDSERVER")
+              AND (OrderSessions00."UNI" = Payments."SESSIONUNI")
+            JOIN ORDERS Orders00
+              ON (Orders00."VISIT" = OrderSessions00."VISIT")
+              AND (Orders00."MIDSERVER" = OrderSessions00."MIDSERVER")
+              AND (Orders00."IDENTINVISIT" = OrderSessions00."ORDERIDENT")
+            LEFT JOIN CURRENCIES CURRENCIES00
+              ON (CURRENCIES00."SIFR" = Payments."SIFR")
+            LEFT JOIN CURRENCYTYPES CURRENCYTYPES00
+              ON (CURRENCYTYPES00."SIFR" = CURRENCIES00."PARENT")
+            JOIN GLOBALSHIFTS GLOBALSHIFTS00
+              ON (GLOBALSHIFTS00."MIDSERVER" = Orders00."MIDSERVER")
+              AND (GLOBALSHIFTS00."SHIFTNUM" = Orders00."ICOMMONSHIFT")
+            WHERE 
+              Payments."IGNOREINREP" = 0
+              AND Payments."STATE" = 6
+              AND GLOBALSHIFTS00."SHIFTDATE" = CONVERT(DATETIME, '{date}', 102)
+              AND GLOBALSHIFTS00."STATUS" = 3
+              AND Payments."SHOWINREP" BETWEEN 0 AND 2
+            GROUP BY 
+              CURRENCYTYPES00."NAME", 
+              CURRENCIES00."NAME"
+        )
+        SELECT 
+            CASE WHEN rn = 1 THEN "Тип валюты" END AS "Тип валюты", 
+            "Валюта", 
+            "Сумма"
+        FROM CurrencyData
+    """)
     return query
 
 
 def get_order_data_query(check):
-    return f"""
+    query = text(f"""
         SELECT TOP 1
             FORMAT(SHIFTDATE, 'dd.MM.yyyy') AS ShiftDate,
             GUESTSCOUNT, 
@@ -220,10 +220,12 @@ def get_order_data_query(check):
         LEFT JOIN GLOBALSHIFTS ON ORDERS.ICOMMONSHIFT = GLOBALSHIFTS.SHIFTNUM
         WHERE ORDERS.VISIT = (SELECT MAX(PRINTCHECKS.VISIT) FROM PRINTCHECKS WHERE CHECKNUM = {check})
         ORDER BY SHIFTDATE DESC
-    """
+    """)
+    return query
+
 
 def get_session_dishes_data_query(check):
-    return f"""
+    query = text(f"""
         WITH NumberedDishes AS (
             SELECT 
                 REPLACE(MENUITEMS.NAME, '<', '&lt;') AS MenuItemName, 
@@ -252,10 +254,12 @@ def get_session_dishes_data_query(check):
             ModifierPieces,
             VoidName
         FROM NumberedDishes;
-    """
+    """)
+    return query
+
 
 def get_payment_data_query(check):
-    return f"""
+    query = text(f"""
         SELECT 
             CURRENCIES.NAME AS CurrencyName, 
             EMPLOYEES.NAME AS EmployeeName, 
@@ -264,10 +268,12 @@ def get_payment_data_query(check):
         LEFT JOIN CURRENCIES ON PAYMENTS.SIFR = CURRENCIES.SIFR
         LEFT JOIN EMPLOYEES ON PAYMENTS.IAUTHOR = EMPLOYEES.SIFR
         WHERE PAYMENTS.VISIT = (SELECT MAX(VISIT) FROM PRINTCHECKS WHERE CHECKNUM = {check})
-    """
+    """)
+    return query
+
 
 def get_discount_data_query(check):
-    return f"""
+    query = text(f"""
         SELECT 
             DISCOUNTS.NAME AS DiscountName, 
             DISHDISCOUNTS.CALCAMOUNT AS DiscountAmount, 
@@ -275,44 +281,45 @@ def get_discount_data_query(check):
         FROM DISHDISCOUNTS
         LEFT JOIN DISCOUNTS ON DISHDISCOUNTS.SIFR = DISCOUNTS.SIFR
         WHERE DISHDISCOUNTS.VISIT = (SELECT MAX(VISIT) FROM PRINTCHECKS WHERE CHECKNUM = {check})
-    """
+    """)
+    return query
 
 
 def connectbd(database_id, ip_address, username, password, query_type, date=None, end=None, check=None, classic=None):
-    """Подключается к базе данных и возвращает данные в виде DataFrame."""
-    # Формируем строку подключения с использованием SQLAlchemy и указанной базы данных
-    connection_string = (f"mssql+pyodbc://"
-                         f"{username}:{password}@{ip_address}/{database_id}?"
-                         f"driver=ODBC+Driver+18+for+SQL+Server"
-                         f"&TrustServerCertificate=yes")
+    connection_string = (
+        f"mssql+pyodbc://{username}:{password}@{ip_address}/{database_id}?"
+        f"driver=ODBC+Driver+18+for+SQL+Server"
+        f"&TrustServerCertificate=yes"
+    )
 
-    # Создаем движок SQLAlchemy
     engine = create_engine(connection_string)
 
-    # Выбор запроса в зависимости от query_type
-    if query_type == 'operation':
-        query = get_query_for_operations(date, end)
-    elif query_type == 'payment':
-        query = get_query_for_payments(date)
-    elif query_type == 'order':
-        query = get_order_data_query(check)
-    elif query_type == 'session':
-        query = get_session_dishes_data_query(check)
-    elif query_type == 'payment_data':
-        query = get_payment_data_query(check)
-    elif query_type == 'discount':
-        query = get_discount_data_query(check)
-    elif query_type == 'discount_data':
-        query = get_discounted_check_details(date)
-    elif query_type == 'get_check':
-        query = get_check(date)
-    elif query_type == 'sales_dish':
-        query = get_sales_dish(date, end, classic)
+    # Карта запросов
+    query_map = {
+        'operation': lambda: get_query_for_operations(date, end),
+        'payment': lambda: get_query_for_payments(date),
+        'order': lambda: get_order_data_query(check),
+        'session': lambda: get_session_dishes_data_query(check),
+        'payment_data': lambda: get_payment_data_query(check),
+        'discount': lambda: get_discount_data_query(check),
+        'discount_data': lambda: get_discounted_check_details(date),
+        'get_check': lambda: get_check(date),
+        'sales_dish': lambda: get_sales_dish(date, end, classic)
+    }
 
-    else:
-        raise ValueError("Invalid query type specified")
+    # Проверка на правильность запроса
+    if query_type not in query_map:
+        raise ValueError("Указан неверный тип запроса")
 
-    # Используем движок для выполнения запроса
-    df = pd.read_sql(query, engine)
+    # Получение запроса и параметров
+    query = query_map[query_type]()
+
+    try:
+        df = pd.read_sql(query, engine)
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        df = pd.DataFrame()
+    finally:
+        engine.dispose()
 
     return df

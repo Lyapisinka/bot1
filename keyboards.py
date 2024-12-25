@@ -32,6 +32,7 @@ def action_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True
     )
 
+
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -42,7 +43,6 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 
 
 async def update_keyboard_history(state: FSMContext, new_keyboard: ReplyKeyboardMarkup):
-    """Обновляет историю клавиатур для текущего пользователя."""
     data = await state.get_data()
     keyboard_history = data.get('keyboard_history', [])
     keyboard_history.append(new_keyboard)

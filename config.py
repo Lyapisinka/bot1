@@ -9,7 +9,6 @@ LOCATIONS = [
     {"RK7CHUDO": "Чудо Юдо"}, {"Rep56": "Эрмитаж"}
 ]
 
-
 # Словарь, который содержит параметры для каждой локации
 LOCATION_CONFIG = {
     'Чудо Юдо': {
@@ -25,6 +24,3 @@ LOCATION_CONFIG = {
         'classific': 2560
     }
 }
-
-
-#LOCATIONS_NAMES = [loc_name for loc in LOCATIONS for loc_name in loc.values()]
